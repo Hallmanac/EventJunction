@@ -14,7 +14,7 @@ namespace EvtJunction.Aggregator
 	public class Subscription<TMessage> : ISubscription<TMessage> where TMessage : IApplicationEvent
 	{
         private bool _disposed;
-        private Guid _eventId;
+        private Guid _subscriptionId;
 
         public Subscription(IEventAggregator eventAggregator, Func<TMessage, Task> action, Guid correlationId = default(Guid))
         {
@@ -27,13 +27,13 @@ namespace EvtJunction.Aggregator
             CorrelationId = correlationId == default(Guid) ? Guid.NewGuid() : correlationId;
         }
 
-        public Guid EventId
+        public Guid SubscriptionId
         {
             get
             {
-                if (_eventId == Guid.Empty)
-                    _eventId = Guid.NewGuid();
-                return _eventId;
+                if (_subscriptionId == Guid.Empty)
+                    _subscriptionId = Guid.NewGuid();
+                return _subscriptionId;
             }
         }
 
@@ -79,10 +79,10 @@ namespace EvtJunction.Aggregator
                 return false;
             if (ReferenceEquals(this, other))
                 return true;
-            return _eventId.Equals(other.EventId);
+            return _subscriptionId.Equals(other.SubscriptionId);
         }
 
-        public override int GetHashCode() { return EventId.GetHashCode(); }
+        public override int GetHashCode() { return SubscriptionId.GetHashCode(); }
 
         public static bool operator ==(Subscription<TMessage> left, Subscription<TMessage> right) { return Equals(left, right); }
 
