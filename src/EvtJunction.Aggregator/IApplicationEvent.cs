@@ -5,10 +5,13 @@
 // http://www.minddriven.de/index.php/technology/development/design-patterns/event-aggregator-implementation
 //////////////////////////////////////////
 
+using System;
+
+
 namespace EvtJunction.Aggregator
 {
 	public interface IApplicationEvent
 	{
-		 
-	}
+        Guid CorrelationId { get; set; }
+    }
 }

@@ -14,136 +14,170 @@ namespace EvtJunction.Aggregator
 {
 	public class EventAggregator : IEventAggregator
 	{
-		private readonly object _lock = new object();
-		private readonly IDictionary<Type, IList> _subscriptions = new Dictionary<Type, IList>();
-		private static readonly IEventAggregator CurrentInstance = new EventAggregator();
+        private readonly object _lock = new object();
+        private readonly IDictionary<Type, IList> _subscriptions = new Dictionary<Type, IList>();
 
-		public static IEventAggregator Current { get { return CurrentInstance; } }
+        //public static IEventAggregator Current { get { return AppServiceLocator.Current.GetInstance<IEventAggregator>(); } }
+        public static IEventAggregator Current { get; } = new EventAggregator();
 
-		public void Publish<TMessage>(TMessage message) where TMessage : IApplicationEvent
-		{
-			if(message == null)
-				throw new ArgumentNullException("message");
-			lock(_lock)
-			{
-				var messageType = typeof(TMessage);
-				if(_subscriptions.ContainsKey(messageType))
-				{
-					var subscriptionList = new List<ISubscription<TMessage>>(
-						_subscriptions[messageType].Cast<ISubscription<TMessage>>());
-					foreach(var subscription in subscriptionList)
-					{
-						subscription.Action(message);
-					}
-				}
-			}
-		}
 
-		public ISubscription<TMessage> Subscribe<TMessage>(Action<TMessage> action)
-			where TMessage : IApplicationEvent
-		{
-			lock(_lock)
-			{
-				var messageType = typeof(TMessage);
-				var subscription = new Subscription<TMessage>(this, action);
-				if(_subscriptions.ContainsKey(messageType))
-					_subscriptions[messageType].Add(subscription);
-				else
-					_subscriptions.Add(messageType, new List<ISubscription<TMessage>> {subscription});
-				return subscription;
-			}
-		}
+        public void Publish<TMessage>(TMessage message) where TMessage : IApplicationEvent
+        {
+            if (message == null)
+            {
+                throw new ArgumentNullException(nameof(message));
+            }
+            lock (_lock)
+            {
+                var messageType = typeof(TMessage);
+                if (_subscriptions.ContainsKey(messageType))
+                {
+                    var subscriptionList = new List<ISubscription<TMessage>>(
+                        _subscriptions[messageType].Cast<ISubscription<TMessage>>());
+                    foreach (var subscription in subscriptionList)
+                    {
+                        subscription.Action(message);
+                    }
+                }
+            }
+        }
 
-		public void UnSubscribe<TMessage>(ISubscription<TMessage> subscription)
-			where TMessage : IApplicationEvent
-		{
-			var messageType = typeof(TMessage);
-			lock(_lock)
-			{
-				if(_subscriptions.ContainsKey(messageType))
-					_subscriptions[messageType].Remove(subscription);
-			}
-		}
 
-		public void ClearAllSubscriptions() { ClearAllSubscriptions(null); }
+        public ISubscription<T> Subscribe<T>(Action<T> action, Guid correlationId = default(Guid)) where T : IApplicationEvent
+        {
+            lock (_lock)
+            {
+                var messageType = typeof(T);
+                var subscription = new Subscription<T>(this, action, correlationId);
+                if (_subscriptions.ContainsKey(messageType))
+                {
+                    // Check to see if there is already a subscription of the same type with the same correlation ID
+                    if (correlationId != default(Guid))
+                    {
+                        var hasCorrelationID = false;
+                        var subsList = _subscriptions[messageType];
+                        foreach (Subscription<T> subscriptionItem in subsList)
+                        {
+                            hasCorrelationID = subscriptionItem.CorrelationId == correlationId && subscriptionItem.Action == action;
+                            if (hasCorrelationID)
+                            {
+                                subscription = subscriptionItem;
+                            }
+                        }
+                        if (!hasCorrelationID)
+                        {
+                            _subscriptions[messageType].Add(subscription);
+                        }
+                    }
+                    else
+                    {
+                        _subscriptions[messageType].Add(subscription);
+                    }
+                }
+                else
+                {
+                    _subscriptions.Add(messageType, new List<ISubscription<T>> { subscription });
+                }
+                return subscription;
+            }
+        }
 
-		public void ClearAllSubscriptions(Type[] exceptMessages)
-		{
-			foreach(var messageSubscriptions in new Dictionary<Type, IList>(_subscriptions))
-			{
-				var canDelete = true;
-				if(exceptMessages != null)
-					canDelete = !exceptMessages.Contains(messageSubscriptions.Key);
-				if(!canDelete)
-					continue;
-				lock(_lock) 
-				{
-					_subscriptions.Remove(messageSubscriptions);
-				}
-			}
-		}
-	}
-#region -- First attempt (Commented out) --
 
-	/*public class EventAggregator : IEventAggregator
-	{
-		private readonly ConcurrentDictionary<Type, List<object>> _subscriptions = new ConcurrentDictionary<Type, List<object>>();
+        public void UnSubscribe<T>(ISubscription<T> subscription) where T : IApplicationEvent
+        {
+            var messageType = typeof(T);
+            lock (_lock)
+            {
+                if (_subscriptions.ContainsKey(messageType))
+                {
+                    _subscriptions[messageType].Remove(subscription);
+                }
+            }
+        }
 
-		public static IEventAggregator Current { get { return AppServiceLocator.Current.GetInstance<IEventAggregator>(); } }
 
-		public void Publish<T>(T message) where T : IApplicationEvent
-		{
-			var thisLock = new object();
-			var subscribers = GetSubscribers(typeof(T));
+        public void ClearAllSubscriptions() { ClearAllSubscriptions(null); }
 
-			// To Array creates a copy in case someone unsubscribes in their own handler
-			foreach(var objectSubscriber in subscribers.ToArray())
-			{
-				var subscriber = (Action<T>)objectSubscriber;
-				var syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
-				syncContext.Post(state => subscriber(message), null);
-			}
-		}
 
-		public void Subscribe<T>(Action<T> callback) where T : IApplicationEvent
-		{
-			var thisLock = new object();
-			lock(thisLock)
-			{
-				var subscribers = GetSubscribers(typeof(T));
-				subscribers.Add(callback);
-			}
-		}
+        public void ClearAllSubscriptions(Type[] exceptMessages)
+        {
+            foreach (var messageSubscriptions in new Dictionary<Type, IList>(_subscriptions))
+            {
+                var canDelete = true;
+                if (exceptMessages != null)
+                {
+                    canDelete = !exceptMessages.Contains(messageSubscriptions.Key);
+                }
+                if (!canDelete)
+                {
+                    continue;
+                }
+                lock (_lock)
+                {
+                    _subscriptions.Remove(messageSubscriptions);
+                }
+            }
+        }
 
-		public void Unsubscribe<T>(Action<T> callback) where T : IApplicationEvent
-		{
-			var subscribers = GetSubscribers(typeof(T));
-			var thisLock = new object();
-			lock(thisLock)
-			{
-				object existing = null;
-				foreach(var s in subscribers.Cast<Action<T>>().Where(s => s.Method.Name == callback.Method.Name))
-				{
-					existing = s;
-				}
-				subscribers.Remove(existing);
-			}
-		}
 
-		private List<object> GetSubscribers(Type subscriberType)
-		{
-			List<object> subscribers;
-			var thisLock = new object();
-			lock(thisLock)
-			{
-				var found = _subscriptions.TryGetValue(subscriberType, out subscribers);
-				if(found)
-					return subscribers;
-				subscribers = new List<object>();
-				_subscriptions.AddOrUpdate(subscriberType, subscribers, (type, oldValue) => subscribers);
-			}
-			return subscribers;
-		}
-	}*/
-#endregion
+        public void ClearAllCorrelatedSubscriptions(Guid correlationId)
+        {
+            var subs = new Dictionary<Type, IList>(_subscriptions);
+            foreach (var subscriberList in subs)
+            {
+                var subList = Activator.CreateInstance(subscriberList.Value.GetType()) as IList;
+                if (subList == null)
+                {
+                    continue;
+                }
+                foreach (var item in subscriberList.Value)
+                {
+                    subList.Add(item);
+                }
+
+                foreach (var subscription in subList)
+                {
+                    var subType = subscription.GetType();
+                    if (subType.GetInterface(typeof(ISubscription<>).Name) == null)
+                    {
+                        continue;
+                    }
+                    var correlationIdProp = subType.GetProperties().ToList().FirstOrDefault(info => info.Name == "CorrelationId");
+                    if (correlationIdProp == null)
+                    {
+                        continue;
+                    }
+                    var idVal = correlationIdProp.GetValue(subscription, null) is Guid
+                        ? (Guid)correlationIdProp.GetValue(subscription, null)
+                        : new Guid();
+                    if (idVal != correlationId)
+                    {
+                        continue;
+                    }
+                    lock (_lock)
+                    {
+                        if (_subscriptions.ContainsKey(subscriberList.Key))
+                        {
+                            _subscriptions[subscriberList.Key].Remove(subscription);
+                        }
+                    }
+                }
+            }
+        }
+
+
+        public void ClearSubscriptionsFor<T>()
+        {
+            var subs = new Dictionary<Type, IList>(_subscriptions);
+            if (!subs.ContainsKey(typeof(T)))
+            {
+                return;
+            }
+            var evtSubscriptions = subs.FirstOrDefault(messageSubscriptions => messageSubscriptions.Key == typeof(T));
+            lock (_lock)
+            {
+                _subscriptions.Remove(evtSubscriptions);
+            }
+        }
+    }
 }
