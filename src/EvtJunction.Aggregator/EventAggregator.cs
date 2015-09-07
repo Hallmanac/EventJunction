@@ -7,43 +7,59 @@
 
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
+
+using Nito.AsyncEx.Synchronous;
+
 
 namespace EvtJunction.Aggregator
 {
 	public class EventAggregator : IEventAggregator
 	{
         private readonly object _lock = new object();
-        private readonly IDictionary<Type, IList> _subscriptions = new Dictionary<Type, IList>();
+        private readonly ConcurrentDictionary<Type, IList> _subscriptions = new ConcurrentDictionary<Type, IList>();
 
         //public static IEventAggregator Current { get { return AppServiceLocator.Current.GetInstance<IEventAggregator>(); } }
         public static IEventAggregator Current { get; } = new EventAggregator();
 
 
-        public void Publish<TMessage>(TMessage message) where TMessage : IApplicationEvent
+        public async Task PublishAsync<TMessage>(TMessage message) where TMessage : IApplicationEvent
         {
             if (message == null)
             {
                 throw new ArgumentNullException(nameof(message));
             }
+
+            var messageType = typeof(TMessage);
+            List<ISubscription<TMessage>> subscriptionList = null;
             lock (_lock)
             {
-                var messageType = typeof(TMessage);
                 if (_subscriptions.ContainsKey(messageType))
                 {
-                    var subscriptionList = new List<ISubscription<TMessage>>(
+                    subscriptionList = new List<ISubscription<TMessage>>(
                         _subscriptions[messageType].Cast<ISubscription<TMessage>>());
-                    foreach (var subscription in subscriptionList)
-                    {
-                        subscription.Action(message);
-                    }
+                }
+            }
+            if (subscriptionList != null)
+            {
+                foreach (var subscription in subscriptionList)
+                {
+                    await subscription.Action(message);
                 }
             }
         }
 
 
-        public ISubscription<T> Subscribe<T>(Action<T> action, Guid correlationId = default(Guid)) where T : IApplicationEvent
+        public void Publish<TAppEvent>(TAppEvent message) where TAppEvent : IApplicationEvent
+        {
+            PublishAsync(message).WaitAndUnwrapException();
+        }
+
+
+        public ISubscription<T> Subscribe<T>(Func<T, Task> action, Guid correlationId = default(Guid)) where T : IApplicationEvent
         {
             lock (_lock)
             {
@@ -76,10 +92,17 @@ namespace EvtJunction.Aggregator
                 }
                 else
                 {
-                    _subscriptions.Add(messageType, new List<ISubscription<T>> { subscription });
+                    _subscriptions.GetOrAdd(messageType, new List<ISubscription<T>> { subscription });
                 }
                 return subscription;
             }
+        }
+
+
+        public ISubscription<TAppEvent> SubscribeSynchronousMethod<TAppEvent>(Action<TAppEvent> callback, Guid correlationId = new Guid())
+            where TAppEvent : IApplicationEvent
+        {
+            return Subscribe<TAppEvent>(evtMsg => Task.Run(() => callback(evtMsg)), correlationId);
         }
 
 
@@ -114,7 +137,8 @@ namespace EvtJunction.Aggregator
                 }
                 lock (_lock)
                 {
-                    _subscriptions.Remove(messageSubscriptions);
+                    IList outList;
+                    _subscriptions.TryRemove(messageSubscriptions.Key, out outList);
                 }
             }
         }
@@ -176,7 +200,8 @@ namespace EvtJunction.Aggregator
             var evtSubscriptions = subs.FirstOrDefault(messageSubscriptions => messageSubscriptions.Key == typeof(T));
             lock (_lock)
             {
-                _subscriptions.Remove(evtSubscriptions);
+                IList outList;
+                _subscriptions.TryRemove(evtSubscriptions.Key, out outList);
             }
         }
     }

@@ -6,6 +6,8 @@
 //////////////////////////////////////////
 
 using System;
+using System.Threading.Tasks;
+
 
 namespace EvtJunction.Aggregator
 {
@@ -13,7 +15,7 @@ namespace EvtJunction.Aggregator
 	{
         Guid EventId { get; }
 
-        Action<TMessage> Action { get; }
+        Func<TMessage, Task> Action { get; }
 
         IEventAggregator EventAggregator { get; }
 

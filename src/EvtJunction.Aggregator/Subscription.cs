@@ -6,6 +6,8 @@
 //////////////////////////////////////////
 
 using System;
+using System.Threading.Tasks;
+
 
 namespace EvtJunction.Aggregator
 {
@@ -14,7 +16,7 @@ namespace EvtJunction.Aggregator
         private bool _disposed;
         private Guid _eventId;
 
-        public Subscription(IEventAggregator eventAggregator, Action<TMessage> action, Guid correlationId = default(Guid))
+        public Subscription(IEventAggregator eventAggregator, Func<TMessage, Task> action, Guid correlationId = default(Guid))
         {
             if (eventAggregator == null)
                 throw new ArgumentNullException(nameof(eventAggregator));
@@ -37,7 +39,7 @@ namespace EvtJunction.Aggregator
 
         public Guid CorrelationId { get; set; }
 
-        public Action<TMessage> Action { get; private set; }
+        public Func<TMessage, Task> Action { get; private set; }
 
         public IEventAggregator EventAggregator { get; private set; }
 
