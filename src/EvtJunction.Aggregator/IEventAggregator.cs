@@ -6,19 +6,38 @@
 //////////////////////////////////////////
 
 using System;
+using System.Threading.Tasks;
+
 
 namespace EvtJunction.Aggregator
 {
 	public interface IEventAggregator
 	{
-		void Publish<TAppEvent>(TAppEvent message) where TAppEvent : IApplicationEvent;
+        Task PublishAsync<TAppEvent>(TAppEvent message) where TAppEvent : IApplicationEvent;
 
-		ISubscription<TAppEvent> Subscribe<TAppEvent>(Action<TAppEvent> callback) where TAppEvent : IApplicationEvent;
 
-		void UnSubscribe<TAppEvent>(ISubscription<TAppEvent> subscription) where TAppEvent : IApplicationEvent;
+        void Publish<TAppEvent>(TAppEvent message) where TAppEvent : IApplicationEvent;
 
-		void ClearAllSubscriptions();
 
-		void ClearAllSubscriptions(Type[] exceptMessages); 
-	}
+        ISubscription<TAppEvent> Subscribe<TAppEvent>(Func<TAppEvent, Task> callback, Guid correlationId = default(Guid))
+            where TAppEvent : IApplicationEvent;
+
+        ISubscription<TAppEvent> SubscribeSynchronousMethod<TAppEvent>(Action<TAppEvent> callback, Guid correlationId = default(Guid))
+            where TAppEvent : IApplicationEvent;
+
+
+        void UnSubscribe<TAppEvent>(ISubscription<TAppEvent> subscription) where TAppEvent : IApplicationEvent;
+
+
+        void ClearAllSubscriptions();
+
+
+        void ClearAllSubscriptions(Type[] exceptMessages);
+
+
+        void ClearSubscriptionsFor<T>();
+
+
+        void ClearAllCorrelatedSubscriptions(Guid correlationId);
+    }
 }

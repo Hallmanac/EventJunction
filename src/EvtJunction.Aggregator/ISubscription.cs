@@ -6,15 +6,19 @@
 //////////////////////////////////////////
 
 using System;
+using System.Threading.Tasks;
+
 
 namespace EvtJunction.Aggregator
 {
 	public interface ISubscription<TMessage> : IDisposable, IEquatable<ISubscription<TMessage>> where TMessage : IApplicationEvent
 	{
-		Guid EventId { get; }
+        Guid SubscriptionId { get; }
 
-		Action<TMessage> Action { get; }
+        Func<TMessage, Task> Action { get; }
 
-		IEventAggregator EventAggregator { get; } 
-	}
+        IEventAggregator EventAggregator { get; }
+
+        Guid CorrelationId { get; set; }
+    }
 }
