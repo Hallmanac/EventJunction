@@ -65,6 +65,12 @@ namespace EvtJunction.Aggregator
             {
                 var messageType = typeof(T);
                 var subscription = new Subscription<T>(this, action, correlationId);
+<<<<<<< HEAD
+=======
+
+                // Check to see if we have this event message type defined in the subscriptions dictionary. If not, create the
+                // event message type and add the subscription to it.
+>>>>>>> dev
                 if (_subscriptions.ContainsKey(messageType))
                 {
                     // Check to see if there is already a subscription of the same type with the same correlation ID
@@ -72,6 +78,7 @@ namespace EvtJunction.Aggregator
                     {
                         var hasCorrelationID = false;
                         var subsList = _subscriptions[messageType];
+<<<<<<< HEAD
                         foreach (Subscription<T> subscriptionItem in subsList)
                         {
                             hasCorrelationID = subscriptionItem.CorrelationId == correlationId && subscriptionItem.Action == action;
@@ -79,6 +86,24 @@ namespace EvtJunction.Aggregator
                             {
                                 subscription = subscriptionItem;
                             }
+=======
+
+                        // Iterate through the subscriptions and determine if there is an existing subscription with that correlation ID
+                        foreach (Subscription<T> subscriptionItem in subsList)
+                        {
+                            // We check for a match on both the correlation Id and the action (or method to be called when event is published)
+                            hasCorrelationID = subscriptionItem.CorrelationId == correlationId && subscriptionItem.Action == action;
+
+                            // If we don't have a correlation Id then we continue with the loop
+                            if (!hasCorrelationID)
+                            {
+                                continue;
+                            }
+
+                            // Otherwise we we pull the existing subscription out of the current list and return 
+                            // that back to the subscriber.
+                            subscription = subscriptionItem;
+>>>>>>> dev
                         }
                         if (!hasCorrelationID)
                         {
